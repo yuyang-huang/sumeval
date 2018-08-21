@@ -146,15 +146,15 @@ class RougeCalculator():
         f1 = self._calc_f1(matches, count_for_recall, count_for_prec, alpha)
         return f1
 
-    def _calc_f1(self, matches, count_for_recall, count_for_precision, alpha):
+    def _calc_f1(self, matches, count_for_recall, count_for_precision, alpha, w=1.):
         def safe_div(x1, x2):
             return 0 if x2 == 0 else x1 / x2
-        recall = safe_div(matches, count_for_recall)
-        precision = safe_div(matches, count_for_precision)
+        recall = safe_div(matches, count_for_recall ** w) ** (1 / w)
+        precision = safe_div(matches, count_for_precision ** w) ** (1 / w)
         denom = (1.0 - alpha) * precision + alpha * recall
         return safe_div(precision * recall, denom)
 
-    def lcs(self, a, b):
+    def lcs(self, a, b, w=1.):
         longer = a
         base = b
         if len(longer) < len(base):
@@ -164,24 +164,33 @@ class RougeCalculator():
             return 0
 
         row = [0] * len(base)
+        matches = [0] * len(base)  # consecutive matches for ROUGE-W
         for c_a in longer:
             left = 0
             upper_left = 0
+            matches_upper_left = 0
             for i, c_b in enumerate(base):
                 up = row[i]
+                matches_up = matches[i]
                 if c_a == c_b:
-                    value = upper_left + 1
+                    value = upper_left + (matches_upper_left + 1) ** w - matches_upper_left ** w
+                    matches[i] = matches_upper_left + 1
                 else:
                     value = max(left, up)
+                    matches[i] = 0
                 row[i] = value
                 left = value
                 upper_left = up
+                matches_upper_left = matches_up
 
         return left
 
     def rouge_l(self, summary, references, alpha=0.5):
+        return self.rouge_w(summary, references, alpha, w=1.)
+
+    def rouge_w(self, summary, references, alpha=0.5, w=1.2):
         """
-        Calculate ROUGE-L score.
+        Calculate ROUGE-W score.
 
         Parameters
         ----------
@@ -193,7 +202,9 @@ class RougeCalculator():
             alpha -> 0: recall is more important
             alpha -> 1: precision is more important
             F = 1/(alpha * (1/P) + (1 - alpha) * (1/R))
-        
+        w: float
+            Set to 1 for ROUGE-L.
+
         Returns
         -------
         f1: float
@@ -205,10 +216,10 @@ class RougeCalculator():
         _refs = [references] if isinstance(references, str) else references
         for r in _refs:
             _r = self.tokenize(r, True)
-            matches += self.lcs(_r, _summary)
+            matches += self.lcs(_r, _summary, w=w)
             count_for_recall += len(_r)
         count_for_prec = len(_refs) * len(_summary)
-        f1 = self._calc_f1(matches, count_for_recall, count_for_prec, alpha)
+        f1 = self._calc_f1(matches, count_for_recall, count_for_prec, alpha, w=w)
         return f1
 
     def count_be(self, text, compare_type, is_reference=False):
@@ -238,7 +249,7 @@ class RougeCalculator():
             alpha -> 0: recall is more important
             alpha -> 1: precision is more important
             F = 1/(alpha * (1/P) + (1 - alpha) * (1/R))
-        
+
         Returns
         -------
         f1: float
