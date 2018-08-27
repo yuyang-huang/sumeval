@@ -18,6 +18,8 @@ class LangZH(BaseLang):
                 re.compile(r'[A-Za-z]+'),
             )
             self.tokenize = self.tokenize_character
+        elif tokenization == 'pretokenized':
+            self.tokenize = self.tokenize_pretokenized
         else:
             raise ValueError(f'Unknown tokenization method: {tokenization!r}')
 
@@ -31,6 +33,9 @@ class LangZH(BaseLang):
         _text = self._preprocess(text)
         words = [t for t in self.tokenizer.cut(_text, cut_all=False)]
         return words
+
+    def tokenize_pretokenized(self, text):
+        return text.split()
 
     def tokenize_character(self, text):
         text = self._preprocess(text)
