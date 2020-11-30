@@ -1,15 +1,25 @@
-import os
 import re
 from sumeval.metrics.lang.base_lang import BaseLang, BasicElement
 
 
 class LangZH(BaseLang):
 
-    def __init__(self):
+    def __init__(self, tokenization='character'):
         super(LangZH, self).__init__("zh")
         self._symbol_replace = re.compile(r"[\.\!/_,$%\^\*\(\)\+\“\’\—\!。：？、，：:~@#￥&（）【】「」《》·]")
-        import jieba
-        self.tokenizer = jieba
+
+        if tokenization == 'jieba':
+            import jieba
+            self.tokenizer = jieba
+            self.tokenize = self.tokenize_jieba
+        elif tokenization == 'character':
+            self.re_special_tokens = (
+                re.compile(r'[+-]?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?'),
+                re.compile(r'[A-Za-z]+'),
+            )
+            self.tokenize = self.tokenize_character
+        else:
+            raise ValueError(f'Unknown tokenization method: {tokenization!r}')
 
     def load_parser(self):
         if self._PARSER is None:
@@ -17,9 +27,26 @@ class LangZH(BaseLang):
             self._PARSER = HanLP.parseDependency
         return self._PARSER
 
-    def tokenize(self, text):
+    def tokenize_jieba(self, text):
         _text = self._preprocess(text)
         words = [t for t in self.tokenizer.cut(_text, cut_all=False)]
+        return words
+
+    def tokenize_character(self, text):
+        text = self._preprocess(text)
+        special_tokens = sorted(
+            (x.start(), x.end(), x.group())
+            for re_obj in self.re_special_tokens
+            for x in re_obj.finditer(text)
+        )
+
+        words = []
+        last_end = 0
+        for start, end, token in special_tokens:
+            words.extend(text[last_end:start])
+            words.append(token)
+            last_end = end
+        words.extend(text[last_end:])
         return words
 
     def _preprocess(self, text):
